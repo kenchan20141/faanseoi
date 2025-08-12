@@ -142,7 +142,7 @@ function getSystemPrompt(structure, wordCount, topic, guidelines) {
     return `
 [最終指令]
 ${coreInstruction}
-請嚴格模仿並參考以下範文的風格、深度和技巧進行創作。
+請嚴格模仿並參考以下範文的風格、立意、結構、深度、用詞、文句、手法和技巧進行創作。
 最終輸出必須為一篇完整的純文字文章。絕不允許使用任何Markdown格式（如標題符號 #、粗體 **、列表 - * 等）。
 絕不允許在文章前後或內部包含任何思考過程、解釋、標籤或非文章內容的文字。直接開始寫作即可。
 
