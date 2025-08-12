@@ -201,7 +201,7 @@ export default async function handler(request, response) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(45000) // 45秒超時
+        signal: AbortSignal.timeout(300000) // 45秒超時
       });
 
       // 如果請求成功 (HTTP 200)
