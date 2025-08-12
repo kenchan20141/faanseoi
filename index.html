@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>翻水</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
+* { font-family: 'Noto Serif TC', 'cwTeXHei', 'cwTeXFangSong', 'cwTeXKai', 'cwTeXMing', 'PingFang TC', 'Microsoft JhengHei', serif; }
+.gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
+.essay-output { line-height: 1.8; letter-spacing: 0.02em; white-space: pre-wrap; }
+.loading-dots { display: inline-block; }
+.loading-dots::after { content: ''; animation: dots 1.5s steps(5, end) infinite; }
+@keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%, 100% { content: '...'; } }
+.fade-in { animation: fadeIn 0.5s ease-in; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.btn-primary { background: linear-gradient(45deg, #4a5568, #2d3748); transition: all 0.3s ease; }
+.btn-primary:hover { background: linear-gradient(45deg, #2d3748, #1a202c); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+.input-focus { transition: all 0.3s ease; }
+.input-focus:focus { border-color: #4a5568; box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.1); }
+.structure-option { transition: all 0.3s ease; cursor: pointer; }
+.structure-option:hover { background-color: #f7fafc; }
+.structure-option.selected { background-color: #e2e8f0; border-color: #4a5568; }
+.word-count-control button { background-color: #f1f5f9; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: #4a5568; transition: all 0.2s ease; }
+.word-count-control button:hover { background-color: #e2e8f0; transform: scale(1.05); }
+.word-count-control button:active { background-color: #cbd5e1; }
+@media print { body { margin: 0; padding: 20px; } .no-print { display: none !important; } .print-optimize { page-break-inside: avoid; } .essay-output { white-space: pre-wrap !important; } }
+</style>
+</head>
+<body class="min-h-screen bg-gray-50">
+<div class="container mx-auto px-4 py-8 max-w-6xl">
+<!-- Header -->
+<div class="text-center mb-8">
+<h1 class="text-4xl font-bold text-gray-800 mb-2"><i class="fas fa-feather-alt mr-3 text-gray-600"></i>翻水</h1>
+</div>
+
+<!-- Input Section -->
+<div class="glass-card rounded-xl shadow-lg p-6 mb-8 no-print">
+<h2 class="text-2xl font-semibold text-gray-800 mb-4"><i class="fas fa-edit mr-2 text-gray-600"></i>作文題目輸入</h2>
+<div class="mb-6">
+<label for="essayTopic" class="block text-sm font-medium text-gray-700 mb-2">請輸入作文題目：</label>
+<textarea id="essayTopic" rows="3" class="input-focus w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none resize-none" placeholder="例如：那一次，我真的很感動"></textarea>
+</div>
+<div class="mb-6">
+<label class="block text-sm font-medium text-gray-700 mb-2">字數設定：</label>
+<div class="word-count-control flex items-center justify-center space-x-6 bg-white border border-gray-300 rounded-lg p-3">
+<button id="decreaseBtn" aria-label="減少字數"><i class="fas fa-minus"></i></button>
+<div class="text-center">
+<span id="wordCountDisplay" class="text-lg font-bold text-gray-800">1300</span>
+<span class="text-sm text-gray-600">字</span>
+</div>
+<button id="increaseBtn" aria-label="增加字數"><i class="fas fa-plus"></i></button>
+</div>
+</div>
+<div class="mb-6">
+<label for="creativeGuidelines" class="block text-sm font-medium text-gray-700 mb-2">創作指引 (可選填)：</label>
+<textarea id="creativeGuidelines" rows="4" class="input-focus w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none resize-y" placeholder="請輸入創作的思路，例如題材和情節等"></textarea>
+</div>
+<div class="mb-6">
+<label class="block text-sm font-medium text-gray-700 mb-3">選擇文章結構：</label>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="structure-option border-2 border-gray-300 rounded-lg p-4 selected" data-structure="classic">
+<div class="flex items-center mb-2">
+<input type="radio" id="classic" name="structure" value="classic" checked class="mr-3">
+<label for="classic" class="font-semibold text-gray-800 cursor-pointer">起承轉合</label>
+</div>
+<p class="text-sm text-gray-600">傳統的四段式結構，適合大部分敘事抒情文題目</p>
+</div>
+<div class="structure-option border-2 border-gray-300 rounded-lg p-4" data-structure="threeline">
+<div class="flex items-center mb-2">
+<input type="radio" id="threeline" name="structure" value="threeline" class="mr-3">
+<label for="threeline" class="font-semibold text-gray-800 cursor-pointer">三線散敘</label>
+</div>
+<p class="text-sm text-gray-600">圍繞主題用不同事件敘寫，各線索相互呼應，共同深化主題</p>
+</div>
+</div>
+</div>
+<button id="generateBtn" class="btn-primary w-full py-3 px-6 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+<i class="fas fa-magic mr-2"></i><span id="btnText">生成作文</span>
+</button>
+<div class="mt-4 text-sm text-gray-600"><i class="fas fa-info-circle mr-2"></i>系統將根據DSE評分標準生成約1200-1300字的敘事抒情文</div>
+</div>
+
+<!-- Essay Output Section -->
+<div class="glass-card rounded-xl shadow-lg p-6 mb-8">
+<div class="flex justify-between items-center mb-4">
+<h2 class="text-2xl font-semibold text-gray-800"><i class="fas fa-file-alt mr-2 text-gray-600"></i>生成結果</h2>
+<div class="text-sm text-gray-600">字數：<span id="charCount" class="font-semibold text-gray-800">0</span></div>
+</div>
+<div id="essayOutput" class="essay-output bg-white border border-gray-200 rounded-lg p-6 text-gray-700 leading-relaxed">
+<div class="text-center text-gray-400 pt-20 no-print"><i class="fas fa-pencil-alt text-4xl mb-4"></i><p>請輸入作文題目後點擊「生成作文」開始創作</p></div>
+</div>
+</div>
+
+<!-- Features Section -->
+<div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
+<div class="glass-card rounded-xl p-6 text-center"><div class="text-3xl mb-4"><i class="fas fa-brain text-gray-600"></i></div><h3 class="font-semibold text-gray-800 mb-2">智能分析</h3><p class="text-gray-600 text-sm">運用先進AI技術分析題目</p></div>
+<div class="glass-card rounded-xl p-6 text-center"><div class="text-3xl mb-4"><i class="fas fa-palette text-gray-600"></i></div><h3 class="font-semibold text-gray-800 mb-2">文學技巧</h3><p class="text-gray-600 text-sm">融合多種文學手法</p></div>
+<div class="glass-card rounded-xl p-6 text-center"><div class="text-3xl mb-4"><i class="fas fa-star text-gray-600"></i></div><h3 class="font-semibold text-gray-800 mb-2">高質量輸出</h3><p class="text-gray-600 text-sm">生成符合DSE評分標準的優質作文</p></div>
+</div>
+
+<!-- Footer -->
+<div class="mt-12 text-center text-gray-500 text-sm no-print"><p>© 2025 陳冠健</p></div>
+</div>
+
+<script>
+// === START OF SCRIPT (REVISED) ===
+
+let isGenerating = false;
+
+document.getElementById('generateBtn').addEventListener('click', async function() {
+    const topic = document.getElementById('essayTopic').value.trim();
+    if (!topic) {
+        alert('請輸入作文題目');
+        return;
+    }
+    if (isGenerating) {
+        return;
+    }
+    await generateEssay(topic);
+});
+
+document.getElementById('essayTopic').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('generateBtn').click();
+    }
+});
+
+document.querySelectorAll('.structure-option').forEach(option => {
+    option.addEventListener('click', function() {
+        document.querySelectorAll('.structure-option').forEach(opt => opt.classList.remove('selected'));
+        this.classList.add('selected');
+        this.querySelector('input[type="radio"]').checked = true;
+    });
+});
+
+document.querySelectorAll('input[name="structure"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.querySelectorAll('.structure-option').forEach(opt => opt.classList.remove('selected'));
+        this.closest('.structure-option').classList.add('selected');
+    });
+});
+
+async function generateEssay(topic) {
+    const generateBtn = document.getElementById('generateBtn');
+    const btnText = document.getElementById('btnText');
+    const essayOutput = document.getElementById('essayOutput');
+    const charCount = document.getElementById('charCount');
+
+    // 獲取使用者輸入
+    const wordCountLimit = document.getElementById('wordCountDisplay').textContent;
+    const creativeGuidelines = document.getElementById('creativeGuidelines').value.trim();
+    const selectedStructure = document.querySelector('input[name="structure"]:checked').value;
+
+    // --- UI 更新：開始載入 ---
+    isGenerating = true;
+    generateBtn.disabled = true;
+    btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>正在生成<span class="loading-dots"></span>';
+    essayOutput.innerHTML = `<div class="text-center text-gray-500 pt-20 no-print"><i class="fas fa-hourglass-half text-4xl mb-4 animate-spin"></i><p>AI正在創作中，請稍候...</p></div>`;
+    charCount.textContent = '0';
+
+    // 後端代理 API 的路徑
+    const PROXY_API_URL = '/api/generate-essay';
+
+    try {
+        // --- 呼叫後端代理 ---
+        const response = await fetch(PROXY_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                topic: topic,
+                wordCount: wordCountLimit,
+                guidelines: creativeGuidelines,
+                structure: selectedStructure
+            })
+        });
+
+        const data = await response.json();
+
+        // --- 處理來自代理的回應 ---
+        if (!response.ok) {
+            // 錯誤訊息現在由我們的代理提供
+            const errorMessage = data.error || '未知的伺服器錯誤';
+            throw new Error(errorMessage);
+        }
+
+        if (data.promptFeedback?.blockReason) {
+            throw new Error(`內容生成被阻止，原因: ${data.promptFeedback.blockReason}`);
+        }
+        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            throw new Error('從API收到了無效的回應格式。');
+        }
+
+        const essay = data.candidates[0].content.parts[0].text.trim();
+        
+        // --- 顯示成功結果 ---
+        essayOutput.innerHTML = `<div class="fade-in print-optimize">${essay}</div>`;
+        const charLength = essay.replace(/\s/g, '').length;
+        charCount.textContent = charLength;
+        essayOutput.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    } catch (error) {
+        // --- 處理錯誤 ---
+        console.error('生成作文時發生錯誤:', error);
+        essayOutput.innerHTML = `<div class="text-center text-red-500 pt-20"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-semibold">生成失敗</p><div class="mt-4 text-sm text-gray-600">${error.message}</div><button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors no-print">重新整理頁面</button></div>`;
+    } finally {
+        // --- UI 更新：停止載入 ---
+        isGenerating = false;
+        generateBtn.disabled = false;
+        btnText.innerHTML = '<i class="fas fa-magic mr-2"></i>生成作文';
+    }
+}
+
+// === 其他 UI 互動腳本保持不變 ===
+const textarea = document.getElementById('essayTopic');
+textarea.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const decreaseBtn = document.getElementById('decreaseBtn');
+    const increaseBtn = document.getElementById('increaseBtn');
+    const wordCountDisplay = document.getElementById('wordCountDisplay');
+    let currentWordCount = 1300;
+
+    const updateWordCountDisplay = () => {
+        wordCountDisplay.textContent = currentWordCount;
+    };
+
+    decreaseBtn.addEventListener('click', () => {
+        if (currentWordCount > 100) {
+            currentWordCount -= 100;
+            updateWordCountDisplay();
+        }
+    });
+
+    increaseBtn.addEventListener('click', () => {
+        currentWordCount += 100;
+        updateWordCountDisplay();
+    });
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    });
+
+    document.querySelectorAll('.glass-card').forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'all 0.6s ease';
+        observer.observe(card);
+    });
+
+    updateWordCountDisplay();
+});
+// === END OF SCRIPT ===
+</script>
+</body>
+</html>
