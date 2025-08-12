@@ -106,8 +106,8 @@ export default async function handler(request, response) {
     "contents": [{ "role": "user", "parts": [{ "text": systemPrompt }] }],
     "generationConfig": {
         "temperature": 1.1,
-        "topP": 1,
-        "maxOutputTokens": 4096
+        "topP": 0.9,
+        "maxOutputTokens": 6400
     }
   };
 
