@@ -105,9 +105,9 @@ export default async function handler(request, response) {
   const requestBody = {
     "contents": [{ "role": "user", "parts": [{ "text": systemPrompt }] }],
     "generationConfig": {
-        "temperature": 1.1,
+        "temperature": 1,
         "topP": 0.9,
-        "maxOutputTokens": 6400
+        "maxOutputTokens": 4096
     }
   };
 
