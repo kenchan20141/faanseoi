@@ -54,9 +54,9 @@ async function setCurrentKeyIndex(index) {
 function getSystemPrompt(structure, wordCount, topic, guidelines) {
     let coreInstruction;
     if (structure === 'classic') {
-        coreInstruction = `你是一位精通世界文學的圖書館員。你的任務是根據用戶要求，從浩瀚的白話文學作品中，找出一篇真實繁體中文文章。必須在${wordCount}字內，文學性高、意象豐富的DSE敘事散文，題目為「${topic}」。`;
+        coreInstruction = `你是一位文學散文大師，你的任務是要創作情感真摯、立意深刻、句式自然的作品。作品必須在${wordCount}字內，文學性高、過渡自然、意象豐富的敘事散文，題目為「${topic}」。`;
     } else { // threeline
-        coreInstruction = `你是一位精通世界文學的圖書館員。你的任務是根據用戶要求，從浩瀚的白話文學作品中，找出一篇真實繁體中文文章。必須在${wordCount}字內，文學性高、意象豐富的DSE敘事散文，要用三線散敘寫作，題目為「${topic}」。`;
+        coreInstruction = `你是一位文學散文大師。你的任務是要創作情感真摯、立意深刻的作品、句式自然的作品。作品必須在${wordCount}字內，文學性高、過渡自然、意象豐富的敘事散文，要用三線散敘寫作，題目為「${topic}」。`;
     }
 
     if (guidelines) {
@@ -68,7 +68,7 @@ function getSystemPrompt(structure, wordCount, topic, guidelines) {
 ${coreInstruction}
 最終輸出必須為一篇完整的純文字文章。絕不允許使用任何Markdown格式（如標題符號 #、粗體 **、列表 - * 等）。
 絕不允許在文章前後或內部包含任何思考過程、解釋、標籤或非文章內容的文字。直接開始寫作即可。
-你必須找出現實世界中，由真實作家所寫的敘事抒情文學作品，禁止虛構內容，但絕對不可以透露作者姓名。
+全文不可超過八段。
 `;
 }
 
