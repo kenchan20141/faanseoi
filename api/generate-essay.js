@@ -1,13 +1,12 @@
 // ========================================================================
-//  Gemini 作文生成 API - 金鑰輪換代理 (2025) - [修訂版]
+//  Gemini 作文生成 API - 金鑰輪換代理 (2025)
 //  功能:
 //  1. 接收前端傳來的作文題目、字數、指引等參數。
 //  2. 從 Vercel 環境變數讀取所有 Gemini API Keys。
 //  3. 使用 Vercel KV (Upstash Redis) 讀寫當前金鑰的索引。
-//  4. 如果 API Key 額度用盡 (HTTP 429) 或回應內容無效，自動切換至下一個並重試。
+//  4. 如果 API Key 額度用盡 (HTTP 429)，自動切換至下一個並重試。
 //  5. 構造完整的 Prompt，呼叫 Gemini API。
-//  6. **驗證並提取** Gemini API 的作文內容。
-//  7. **將乾淨的作文文字**回傳給前端。
+//  6. 將 Gemini API 的最終結果回傳給前端。
 // ========================================================================
 
 // 在 KV 數據庫中儲存 "當前金鑰索引" 的鍵名
@@ -155,7 +154,7 @@ ${SAMPLE_ESSAYS}
 export default async function handler(request, response) {
   // 步驟 1: 基本請求驗證 (只接受 POST 請求)
   if (request.method !== 'POST') {
-    return response.status(405).json({ error: 'Method Not Allowed' });
+    return response.status(405).json({ message: 'Method Not Allowed' });
   }
 
   // 從請求中提取參數
@@ -178,7 +177,7 @@ export default async function handler(request, response) {
   let keyIndex = await getCurrentKeyIndex();
 
   // 步驟 4: 準備發送給 Gemini API 的請求內容
-  const MODEL_NAME = 'gemini-1.5-pro-latest'; // 使用最新模型
+  const MODEL_NAME = 'gemini-2.5-pro'; // 建議使用最新模型
   const systemPrompt = getSystemPrompt(structure, wordCount, topic, guidelines);
   
   const requestBody = {
@@ -209,26 +208,21 @@ export default async function handler(request, response) {
       if (geminiResponse.ok) {
         const data = await geminiResponse.json();
         
-        // 【修訂】在此處驗證並提取作文內容
-        const essayText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (essayText) {
-          // 【修訂】提取成功，回傳乾淨的 JSON 給前端
-          console.log(`[成功] 使用第 ${keyIndex + 1} 個 API Key 生成成功。`);
-          return response.status(200).json({ essay: essayText.trim() });
+        // 再次檢查 Gemini 是否因安全理由阻止了內容生成
+        if (data.promptFeedback?.blockReason) {
+             console.warn(`[警告] 內容生成被 Gemini 阻止 (索引: ${keyIndex})，原因: ${data.promptFeedback.blockReason}。正在切換至下一個 Key...`);
+             keyIndex = (keyIndex + 1) % totalKeys;
+             await setCurrentKeyIndex(keyIndex); // 更新索引
+             continue; // 用下一個 Key 重試
         }
         
-        // 【修訂】如果 200 OK 但內容格式不對或被安全過濾，也視為失敗並重試
-        const blockReason = data.promptFeedback?.blockReason;
-        console.warn(`[警告] Gemini 回應成功但內容無效 (索引: ${keyIndex})。原因: ${blockReason || '回應中找不到有效的作文內容'}。正在切換...`);
-        keyIndex = (keyIndex + 1) % totalKeys;
-        await setCurrentKeyIndex(keyIndex);
-        continue; // 用下一個 Key 重試
+        console.log(`[成功] 使用第 ${keyIndex + 1} 個 API Key 生成成功。`);
+        return response.status(200).json(data);
       }
       
       // 如果額度用盡 (HTTP 429)
       if (geminiResponse.status === 429) {
-        console.warn(`[警告] 第 ${keyIndex + 1} 個 API Key 已達額度上限。正在切換...`);
+        console.warn(`[警告] 第 ${keyIndex + 1} 個 API Key 已達額度上限。正在切換至下一個...`);
         keyIndex = (keyIndex + 1) % totalKeys;
         await setCurrentKeyIndex(keyIndex); // 更新索引並重試
         continue; 
@@ -250,11 +244,7 @@ export default async function handler(request, response) {
       return response.status(geminiResponse.status).json(errorData);
 
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error(`[嚴重錯誤] 連接至 Gemini API 超時 (45秒)，金鑰索引: ${keyIndex}`);
-      } else {
-        console.error(`[嚴重錯誤] 連接至 Gemini API 時發生網路層錯誤 (索引: ${keyIndex}):`, error);
-      }
+      console.error(`[嚴重錯誤] 連接至 Gemini API 時發生網路層錯誤或請求超時 (索引: ${keyIndex}):`, error);
       keyIndex = (keyIndex + 1) % totalKeys;
       await setCurrentKeyIndex(keyIndex);
     }
