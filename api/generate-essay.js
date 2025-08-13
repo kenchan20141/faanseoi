@@ -101,7 +101,7 @@ export default async function handler(request, response) {
   let keyIndex = await getCurrentKeyIndex();
 
   // 步驟 4: 準備發送給 Gemini API 的請求內容
-  const MODEL_NAME = 'gemini-2.5-pro'; // 維持不變
+  const MODEL_NAME = 'gemini-2.5-flash'; // 維持不變
   const systemPrompt = getSystemPrompt(structure, wordCount, topic, guidelines);
   
   const requestBody = {
@@ -109,7 +109,7 @@ export default async function handler(request, response) {
     "generationConfig": {
         "temperature": 1,
         "topP": 0.9,
-        "maxOutputTokens": 4096 // 維持不變
+        "maxOutputTokens": 10000 // 維持不變
     }
   };
 
