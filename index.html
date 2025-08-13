@@ -112,7 +112,7 @@
 
 let isGenerating = false;
 
-document.getElementById('generateBtn').addEventListener('click', async function() {
+document.getElementById('generateBtn').addEventListener('click', function() {
     const topic = document.getElementById('essayTopic').value.trim();
     if (!topic) {
         alert('請輸入作文題目');
@@ -121,7 +121,7 @@ document.getElementById('generateBtn').addEventListener('click', async function(
     if (isGenerating) {
         return;
     }
-    await generateEssay(topic);
+    generateEssay(topic);
 });
 
 document.getElementById('essayTopic').addEventListener('keypress', function(e) {
@@ -164,7 +164,7 @@ async function generateEssay(topic) {
     essayOutput.innerHTML = `<div class="text-center text-gray-500 pt-20 no-print"><i class="fas fa-hourglass-half text-4xl mb-4 animate-spin"></i><p>AI正在創作中，請稍候...</p></div>`;
     charCount.textContent = '0';
 
-    // 後端代理 API 的路徑
+    // 後端代理 API 的路徑，確保路徑正確
     const PROXY_API_URL = '/api/generate-essay';
 
     try {
@@ -184,22 +184,28 @@ async function generateEssay(topic) {
 
         // --- 處理來自代理的回應 ---
         if (!response.ok) {
-            // 錯誤訊息現在由我們的代理提供
-            const errorMessage = data.error || '未知的伺服器錯誤';
+            // 現在錯誤訊息是從我們自己的後端來的，格式更可控
+            const errorMessage = data.error || `伺服器回傳錯誤 ${response.status}`;
             throw new Error(errorMessage);
         }
 
-        if (data.promptFeedback?.blockReason) {
-            throw new Error(`內容生成被阻止，原因: ${data.promptFeedback.blockReason}`);
-        }
-        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            throw new Error('從API收到了無效的回應格式。');
-        }
+        // 【關鍵修訂】直接從後端回傳的 data 物件中讀取 essay 屬性
+        const essay = data.essay;
 
-        const essay = data.candidates[0].content.parts[0].text.trim();
+        if (!essay) {
+             // 雖然不太可能發生（因為後端已做驗證），但作為最後防線
+            throw new Error('API雖然成功，但未回傳有效的文章內容。');
+        }
         
         // --- 顯示成功結果 ---
-        essayOutput.innerHTML = `<div class="fade-in print-optimize">${essay}</div>`;
+        // 使用 innerText 避免任何潛在的HTML注入，然後再放入帶樣式的div中
+        const essayContainer = document.createElement('div');
+        essayContainer.className = 'fade-in print-optimize';
+        essayContainer.innerText = essay; // 安全地設置文字內容
+        
+        essayOutput.innerHTML = ''; // 清空舊內容
+        essayOutput.appendChild(essayContainer); // 插入新內容
+        
         const charLength = essay.replace(/\s/g, '').length;
         charCount.textContent = charLength;
         essayOutput.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -207,7 +213,7 @@ async function generateEssay(topic) {
     } catch (error) {
         // --- 處理錯誤 ---
         console.error('生成作文時發生錯誤:', error);
-        essayOutput.innerHTML = `<div class="text-center text-red-500 pt-20"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-semibold">生成失敗</p><div class="mt-4 text-sm text-gray-600">${error.message}</div><button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors no-print">重新整理頁面</button></div>`;
+        essayOutput.innerHTML = `<div class="text-center text-red-500 pt-20"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-semibold">生成失敗</p><div class="mt-4 text-sm text-gray-600 bg-red-100 p-3 rounded">${error.message}</div><button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors no-print">重新整理頁面</button></div>`;
     } finally {
         // --- UI 更新：停止載入 ---
         isGenerating = false;
@@ -252,18 +258,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 entry.target.style.transform = 'translateY(0)';
             }
         });
-    });
+    }, { threshold: 0.1 });
 
     document.querySelectorAll('.glass-card').forEach(card => {
         card.style.opacity = '0';
         card.style.transform = 'translateY(20px)';
-        card.style.transition = 'all 0.6s ease';
+        card.style.transition = 'all 0.6s ease-out';
         observer.observe(card);
     });
 
     updateWordCountDisplay();
 });
-// === END OF SCRIPT ===
 </script>
 </body>
 </html>
