@@ -140,7 +140,7 @@ export default async function handler(request, response) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(60000) // 60秒超時
+          signal: AbortSignal.timeout(300000) // 60秒超時
         });
         
         // 嘗試解析 Gemini 的回傳，無論狀態碼為何
