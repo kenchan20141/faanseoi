@@ -109,7 +109,7 @@ export default async function handler(request, response) {
     let keyIndex = await getCurrentKeyIndex();
 
     // 步驟 4: 準備發送給 Gemini API 的請求內容
-    const MODEL_NAME = 'gemini-1.5-pro-latest'; // 建議使用最新穩定模型
+    const MODEL_NAME = 'gemini-2.5-pro'; // 建議使用最新穩定模型
     const systemPrompt = getSystemPrompt(structure, wordCount, topic, guidelines);
     
     const requestBody = {
