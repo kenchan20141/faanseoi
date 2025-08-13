@@ -53,9 +53,9 @@ const hiddenGuideline = "另外，必須避免使用陳腔濫調的情節（例�
   
     let coreInstruction;
     if (structure === 'classic') {
-        coreInstruction = `你是一位文學散文大師，你的任務是要創作情感真摯、立意深刻、句式自然的作品。作品必須在${wordCount}字內。題目為「${topic}」。`;
+        coreInstruction = `你是一位專業的作家，你的任務是要創作情感真摯、立意深刻、句式自然的DSE敘事抒情作品。作品必須在${wordCount}字內。題目為「${topic}」。`;
     } else { // threeline
-        coreInstruction = `你是一位文學散文大師。你的任務是要創作情感真摯、立意深刻的作品、句式自然的作品。作品必須在${wordCount}字內，要用三線散敘寫作，題目為「${topic}」。`;
+        coreInstruction = `你是一位專業的作家。你的任務是要創作情感真摯、立意深刻的作品、句式自然的DSE敘事抒情作品。作品必須在${wordCount}字內，要用三線散敘寫作，題目為「${topic}」。`;
     }
 
     if (guidelines) {
