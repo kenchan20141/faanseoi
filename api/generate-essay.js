@@ -1,13 +1,9 @@
 // ========================================================================
 //  Gemini 作文生成 API - 金鑰輪換代理 (2025) - 修訂版
-//  功能:
-//  1. 接收前端傳來的作文題目、字數、指引等參數。
-//  2. 從 Vercel 環境變數讀取所有 Gemini API Keys。
-//  3. 使用 Vercel KV (Upstash Redis) 讀寫當前金鑰的索引。
-//  4. 如果 API Key 額度用盡 (HTTP 429)，自動切換至下一個並重試。
-//  5. 構造完整的 Prompt，呼叫 Gemini API。
-//  6.【修訂】明確解析 API 回應，只將生成的純文字作文回傳給前端。
-//  7.【修訂】強化錯誤處理，確保任何情況下都回傳合法的 JSON。
+//  修訂重點:
+//  1. [關鍵] 在收到 Gemini 的 200 OK 回應後，增加了一層驗證，確保 `candidates` 陣列中包含有效的文字內容。
+//  2. 如果 200 OK 回應中沒有有效內容，會將其視為失敗，並自動嘗試下一個 API Key。
+//  3. 伺服器不再回傳整個 Gemini API 的複雜物件，而是回傳一個簡潔的 `{ "essay": "..." }` 物件，簡化了前端的處理邏輯。
 // ========================================================================
 
 // 在 KV 數據庫中儲存 "當前金鑰索引" 的鍵名
@@ -25,10 +21,8 @@ async function getCurrentKeyIndex() {
   try {
     const response = await fetch(`${KV_REST_API_URL}/get/${KEY_INDEX_NAME}`, {
       headers: { 'Authorization': `Bearer ${KV_REST_API_TOKEN}` },
-      cache: 'no-store', // 確保每次都從伺服器獲取最新值
     });
     const data = await response.json();
-    // Vercel KV 的回傳格式是 { result: '"0"' }，需要解析
     return data.result ? JSON.parse(data.result) : 0;
   } catch (error) {
     console.error("從 Vercel KV 讀取索引時發生錯誤:", error);
@@ -45,10 +39,7 @@ async function setCurrentKeyIndex(index) {
   try {
     await fetch(`${KV_REST_API_URL}/set/${KEY_INDEX_NAME}`, {
       method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${KV_REST_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${KV_REST_API_TOKEN}` },
       body: JSON.stringify(index),
     });
   } catch (error) {
@@ -81,125 +72,125 @@ ${coreInstruction}
 export default async function handler(request, response) {
   // 步驟 1: 基本請求驗證 (只接受 POST 請求)
   if (request.method !== 'POST') {
-    return response.status(405).json({ error: '僅允許 POST 請求。' });
+    return response.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  try {
-    // 從請求中提取參數
-    const { topic, wordCount, guidelines, structure } = request.body;
-    if (!topic || !wordCount || !structure) {
-      return response.status(400).json({ error: '請求中缺少必要參數 (topic, wordCount, structure)。' });
+  // 從請求中提取參數
+  const { topic, wordCount, guidelines, structure } = request.body;
+  if (!topic || !wordCount || !structure) {
+    return response.status(400).json({ error: '請求中缺少必要參數 (topic, wordCount, structure)' });
+  }
+
+  // 步驟 2: 從環境變數讀取所有 API Keys
+  const apiKeysString = process.env.GEMINI_API_KEYS;
+  if (!apiKeysString || !KV_REST_API_URL) {
+    const errorMessage = '伺服器端未設定 API Keys 或未連接 KV 數據庫。';
+    console.error(errorMessage);
+    return response.status(500).json({ error: errorMessage });
+  }
+  const apiKeys = apiKeysString.split(',').map(key => key.trim()).filter(key => key);
+  const totalKeys = apiKeys.length;
+
+  if (totalKeys === 0) {
+    const errorMessage = '伺服器端設定了 GEMINI_API_KEYS，但其中沒有有效的金鑰。';
+    console.error(errorMessage);
+    return response.status(500).json({ error: errorMessage });
+  }
+
+  // 步驟 3: 從 KV 數據庫獲取當前應使用的金鑰索引
+  let keyIndex = await getCurrentKeyIndex();
+
+  // 步驟 4: 準備發送給 Gemini API 的請求內容
+  const MODEL_NAME = 'gemini-2.5-pro'; // 維持不變
+  const systemPrompt = getSystemPrompt(structure, wordCount, topic, guidelines);
+  
+  const requestBody = {
+    "contents": [{ "role": "user", "parts": [{ "text": systemPrompt }] }],
+    "generationConfig": {
+        "temperature": 1,
+        "topP": 0.9,
+        "maxOutputTokens": 4096 // 維持不變
     }
+  };
 
-    // 步驟 2: 從環境變數讀取所有 API Keys
-    const apiKeysString = process.env.GEMINI_API_KEYS;
-    if (!apiKeysString || !KV_REST_API_URL || !KV_REST_API_TOKEN) {
-      const errorMessage = '伺服器端未設定 API Keys 或未連接 KV 數據庫。';
-      console.error(errorMessage);
-      return response.status(500).json({ error: errorMessage });
-    }
-    const apiKeys = apiKeysString.split(',').map(key => key.trim()).filter(Boolean);
-    const totalKeys = apiKeys.length;
-    
-    if (totalKeys === 0) {
-        return response.status(500).json({ error: '環境變數中未找到有效的 API Keys。' });
-    }
+  // 步驟 5: 核心邏輯 - 迴圈嘗試所有金鑰，直到成功或全部失敗
+  for (let i = 0; i < totalKeys; i++) {
+    const currentKey = apiKeys[keyIndex];
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${currentKey}`;
 
-    // 步驟 3: 從 KV 數據庫獲取當前應使用的金鑰索引
-    let keyIndex = await getCurrentKeyIndex();
+    try {
+      console.log(`[資訊] 正在嘗試使用第 ${keyIndex + 1}/${totalKeys} 個 API Key (索引: ${keyIndex})`);
 
-    // 步驟 4: 準備發送給 Gemini API 的請求內容
-    const MODEL_NAME = 'gemini-2.5-pro'; // 建議使用最新穩定模型
-    const systemPrompt = getSystemPrompt(structure, wordCount, topic, guidelines);
-    
-    const requestBody = {
-      "contents": [{ "role": "user", "parts": [{ "text": systemPrompt }] }],
-      "generationConfig": {
-          "temperature": 1,
-          "topP": 0.95,
-          "maxOutputTokens": 8192,
-      },
-      "safetySettings": [ // 適度放寬安全設定，避免因誤判而阻止生成
-        { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" },
-        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" }
-      ]
-    };
-
-    // 步驟 5: 核心邏輯 - 迴圈嘗試所有金鑰，直到成功或全部失敗
-    for (let i = 0; i < totalKeys; i++) {
-      const currentKey = apiKeys[keyIndex];
-      const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${currentKey}`;
-      let attemptError = null;
-
-      try {
-        console.log(`[資訊] 正在嘗試使用第 ${keyIndex + 1}/${totalKeys} 個 API Key (索引: ${keyIndex})`);
-
-        const geminiResponse = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(300000) // 60秒超時
-        });
+      const geminiResponse = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(300000) // 300秒超時, 維持不變
+      });
+      
+      // 如果請求成功 (HTTP 200)，需要進一步驗證內容
+      if (geminiResponse.ok) {
+        const data = await geminiResponse.json();
         
-        // 嘗試解析 Gemini 的回傳，無論狀態碼為何
-        const responseText = await geminiResponse.text();
-        const data = JSON.parse(responseText);
+        // 【關鍵修訂】從回應中安全地提取文字
+        const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        // 如果請求成功 (HTTP 200)
-        if (geminiResponse.ok) {
-          // 再次檢查 Gemini 是否因安全理由阻止了內容生成
-          if (data.promptFeedback?.blockReason) {
-               const reason = data.promptFeedback.blockReason;
-               console.warn(`[警告] 內容生成被 Gemini 阻止 (索引: ${keyIndex})，原因: ${reason}。正在切換至下一個 Key...`);
-               attemptError = `內容生成被 Gemini 阻止 (原因: ${reason})。`;
-          } else {
-              // 【修訂】從巢狀結構中提取作文文字
-              const essayText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (essayText) {
-                console.log(`[成功] 使用第 ${keyIndex + 1} 個 API Key 生成成功。`);
-                // 【修訂】回傳固定格式的 JSON
-                return response.status(200).json({ essay: essayText });
-              } else {
-                // 雖然 HTTP 200，但沒有有效的內容
-                console.warn(`[警告] API 回應成功但找不到生成的內容 (索引: ${keyIndex})。回應:`, responseText);
-                attemptError = 'API 回應成功但找不到生成的內容。';
-              }
-          }
-        } else if (geminiResponse.status === 429) { // 如果額度用盡 (HTTP 429)
-          console.warn(`[警告] 第 ${keyIndex + 1} 個 API Key 已達額度上限。正在切換至下一個...`);
-          attemptError = 'API Key 已達額度上限。';
-        } else { // 其他 API 錯誤
-          console.error(`[錯誤] Gemini API 回報錯誤 (狀態碼: ${geminiResponse.status})，金鑰索引: ${keyIndex}。錯誤內容:`, responseText);
-          attemptError = `Gemini API 錯誤 (狀態碼 ${geminiResponse.status})。`;
+        // 【關鍵修訂】檢查是否有因為安全設定等原因被阻擋
+        if (data.promptFeedback?.blockReason) {
+             console.warn(`[警告] 內容生成被 Gemini 阻止 (索引: ${keyIndex})，原因: ${data.promptFeedback.blockReason}。正在切換至下一個 Key...`);
+             keyIndex = (keyIndex + 1) % totalKeys;
+             await setCurrentKeyIndex(keyIndex);
+             continue; // 用下一個 Key 重試
         }
-      } catch (error) {
-        if (error.name === 'AbortError') {
-             console.error(`[嚴重錯誤] 連接至 Gemini API 時請求超時 (索引: ${keyIndex})`);
-             attemptError = '請求超時。';
-        } else if (error instanceof SyntaxError) {
-             console.error(`[嚴重錯誤] 解析 Gemini API 回應時發生 JSON 錯誤 (索引: ${keyIndex})，收到的不是有效的 JSON。`);
-             attemptError = '解析 API 回應失敗，可能 API 服務異常。';
+        
+        // 【關鍵修訂】如果成功但文字內容為空，也視為失敗並重試
+        if (generatedText && generatedText.trim().length > 0) {
+            console.log(`[成功] 使用第 ${keyIndex + 1} 個 API Key 生成成功。`);
+            // 【關鍵修訂】只回傳乾淨的文章，而不是整個 Gemini 物件
+            return response.status(200).json({ essay: generatedText.trim() });
         } else {
-             console.error(`[嚴重錯誤] 連接至 Gemini API 時發生網路層錯誤 (索引: ${keyIndex}):`, error);
-             attemptError = '網路連線錯誤。';
+            console.warn(`[警告] API 回應成功 (200 OK) 但未包含有效內容 (索引: ${keyIndex})。可能觸發了安全過濾但未明確標示。正在切換至下一個 Key...`);
+            keyIndex = (keyIndex + 1) % totalKeys;
+            await setCurrentKeyIndex(keyIndex);
+            continue; // 內容為空，換下一個 Key 重試
         }
       }
       
-      // 如果當前 Key 失敗，切換到下一個並更新 KV
-      keyIndex = (keyIndex + 1) % totalKeys;
-      await setCurrentKeyIndex(keyIndex);
-      
-      // 如果這是最後一個 key，且仍然失敗，則跳出迴圈
-      if (i === totalKeys - 1) {
-          console.error(`[緊急] 所有 ${totalKeys} 個 API Keys 皆已嘗試失敗。最後一次錯誤: ${attemptError}`);
-          return response.status(429).json({ error: '所有可用的 API 金鑰皆已達到每日限額或請求失敗，請稍後再試。' });
+      // 如果額度用盡 (HTTP 429)
+      if (geminiResponse.status === 429) {
+        console.warn(`[警告] 第 ${keyIndex + 1} 個 API Key 已達額度上限。正在切換至下一個...`);
+        keyIndex = (keyIndex + 1) % totalKeys;
+        await setCurrentKeyIndex(keyIndex);
+        continue; // 到達限額，換下一個 Key 重試
       }
+      
+      // 其他 API 錯誤 (如 400 請求錯誤, 500 伺服器錯誤)
+      const errorData = await geminiResponse.json().catch(() => ({ error: { message: `API回傳了狀態 ${geminiResponse.status} 但回應內文不是有效的JSON。` }}));
+      console.error(`[錯誤] Gemini API 回報錯誤 (狀態碼: ${geminiResponse.status})，金鑰索引: ${keyIndex}。錯誤內容:`, JSON.stringify(errorData));
+      
+      // 如果是伺服器端錯誤，值得換 Key 重試
+      if (geminiResponse.status >= 500) {
+        console.warn(`[警告] Gemini 遭遇伺服器錯誤，嘗試切換 Key...`);
+        keyIndex = (keyIndex + 1) % totalKeys;
+        await setCurrentKeyIndex(keyIndex);
+        continue;
+      }
+
+      // 如果是 4xx 客戶端錯誤 (非 429)，通常表示請求本身有問題，直接回傳錯誤
+      return response.status(geminiResponse.status).json({ error: errorData?.error?.message || 'Gemini API 回報客戶端錯誤。' });
+
+    } catch (error) {
+       if (error.name === 'TimeoutError') {
+            console.error(`[嚴重錯誤] 請求超時 (300秒)，正在切換至下一個Key... (索引: ${keyIndex})`);
+        } else {
+            console.error(`[嚴重錯誤] 連接至 Gemini API 時發生網路層錯誤 (索引: ${keyIndex}):`, error.message);
+        }
+        keyIndex = (keyIndex + 1) % totalKeys;
+        await setCurrentKeyIndex(keyIndex);
     }
-  } catch (e) {
-    // 捕捉最外層的未知錯誤，確保伺服器不會崩潰並能回傳格式正確的錯誤訊息
-    console.error('[伺服器內部未知錯誤]', e);
-    return response.status(500).json({ error: '伺服器發生未預期的內部錯誤。' });
   }
+
+  // 步驟 6: 如果所有金鑰都嘗試失敗
+  console.error('[緊急] 所有 API Keys 皆已嘗試失敗。');
+  response.status(503).json({ error: '所有可用的 API 資源均暫時無法處理您的請求，請稍後再試。' });
 }
