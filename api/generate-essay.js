@@ -108,7 +108,7 @@ export default async function handler(request, response) {
     "generationConfig": {
         "temperature": 1,
         "topP": 0.9,
-        "maxOutputTokens": 10000
+        "maxOutputTokens": 4096
     }
   };
 
@@ -176,4 +176,4 @@ export default async function handler(request, response) {
   // 步驟 6: 如果所有金鑰都嘗試失敗
   console.error('[緊急] 所有 API Keys 皆已嘗試失敗。');
   response.status(429).json({ error: '所有可用的 API 金鑰皆已達到每日限額或請求失敗，請稍後再試。' });
-}
+        }
